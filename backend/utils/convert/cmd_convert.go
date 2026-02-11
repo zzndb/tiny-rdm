@@ -2,6 +2,9 @@ package convutil
 
 import (
 	"encoding/base64"
+	"log"
+	"strconv"
+	"time"
 	"strings"
 	sliceutil "tinyrdm/backend/utils/slice"
 )
@@ -63,7 +66,30 @@ func (c CmdConvert) Decode(str string) (string, bool) {
 		args = append(args, base64Content)
 	}
 	output, err := runCommand(c.DecodePath, args...)
+	var fileFallback bool
 	if err != nil || len(output) <= 0 || string(output) == "[RDM-ERROR]" {
+		if err != nil {
+			if strings.Contains(err.Error(), "argument list too long") {
+				fileFallback = true
+				log.Println("fallback to file decode")
+			}
+			log.Println(err)
+		}
+		if (!fileFallback) {
+			return str, false
+		}
+	}
+	var filePath string
+	filePath, err = writeTempFile([]byte(base64Content), strconv.Itoa(int(time.Now().UnixMilli())))
+
+	args = []string{"fallback", filePath }
+	output, err = runCommand(c.DecodePath, args...)
+	err = cleanTempFile(filePath)
+
+	if err != nil || len(output) <= 0 || string(output) == "[RDM-ERROR]" {
+		if err != nil {
+			log.Println(err)
+		}
 		return str, false
 	}
 
