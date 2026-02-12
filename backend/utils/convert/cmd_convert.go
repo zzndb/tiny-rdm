@@ -2,6 +2,9 @@ package convutil
 
 import (
 	"encoding/base64"
+	"log"
+	"strconv"
+	"time"
 	"strings"
 	sliceutil "tinyrdm/backend/utils/slice"
 )
@@ -36,8 +39,30 @@ func (c CmdConvert) Encode(str string) (string, bool) {
 		args = append(args, base64Content)
 	}
 	output, err := runCommand(c.EncodePath, args...)
+	var fileFallback bool = false
 	if err != nil || len(output) <= 0 || string(output) == "[RDM-ERROR]" {
-		return str, false
+		if err != nil {
+			if strings.Contains(err.Error(), "argument list too long") {
+				fileFallback = true
+				log.Println("fallback to file encode")
+			}
+		}
+		if (!fileFallback) {
+			return str, false
+		}
+	}
+	if (fileFallback) {
+		var filePath string
+		filePath, err = writeTempFile([]byte(base64Content), strconv.Itoa(int(time.Now().UnixMilli())))
+
+		args = args[:len(args)-1]
+		args = append(args, "fallback", filePath)
+		output, err = runCommand(c.EncodePath, args...)
+		err = cleanTempFile(filePath)
+
+		if err != nil || len(output) <= 0 || string(output) == "[RDM-ERROR]" {
+			return str, false
+		}
 	}
 
 	outputContent := make([]byte, base64.StdEncoding.DecodedLen(len(output)))
@@ -63,8 +88,30 @@ func (c CmdConvert) Decode(str string) (string, bool) {
 		args = append(args, base64Content)
 	}
 	output, err := runCommand(c.DecodePath, args...)
+	var fileFallback bool = false
 	if err != nil || len(output) <= 0 || string(output) == "[RDM-ERROR]" {
-		return str, false
+		if err != nil {
+			if strings.Contains(err.Error(), "argument list too long") {
+				fileFallback = true
+				log.Println("fallback to file decode")
+			}
+		}
+		if (!fileFallback) {
+			return str, false
+		}
+	}
+	if (fileFallback) {
+		var filePath string
+		filePath, err = writeTempFile([]byte(base64Content), strconv.Itoa(int(time.Now().UnixMilli())))
+
+		args = args[:len(args)-1]
+		args = append(args, "fallback", filePath)
+		output, err = runCommand(c.DecodePath, args...)
+		err = cleanTempFile(filePath)
+
+		if err != nil || len(output) <= 0 || string(output) == "[RDM-ERROR]" {
+			return str, false
+		}
 	}
 
 	outputContent := make([]byte, base64.StdEncoding.DecodedLen(len(output)))
